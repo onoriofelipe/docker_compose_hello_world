@@ -1,10 +1,10 @@
 const express = require('express');
-const redisModule = require('redis');
+// const redisModule = require('redis');
 const postgresModule = require('pg');
 const process = require('process');
-const keys = require('keys.js');
+const keys = require('./keys.js');
 
-const port = 80;
+const port = process.env.port || 3000;
 
 const postgresClient = new postgresModule.Pool({
   host: keys.postgresHost,
@@ -15,6 +15,13 @@ const postgresClient = new postgresModule.Pool({
 });
 
 const app = express();
+
+app.get('/', (req, res) => {
+  let first_message = `GET coming from port ${port}.`
+  let second_message = `environment: ${process.env.PGHOST}.`
+  res.send(`${first_message}<br>${second_message}`);
+  // res.json(process.env);
+});
 
 app.listen(port, () => {
   console.log(`Listening at port ${port}.`);
