@@ -1,0 +1,15 @@
+version: '3.1'
+services:
+  db:
+    # successfully connected directly to db with
+    # docker exec --user postgres -it docker_compose_postgres_test_db_1 psql
+    # -h localhost -U postgres
+    # but this was just a sanity check
+    image: postgres:alpine
+    environment:
+      POSTGRES_PASSWORD: examples
+    ports:
+      - "5432:5432"
+  # webapp:
+    # build: .
+    # depends_on: db
