@@ -2,3 +2,4 @@
 /create_react_app_frontend/node_modules
 /express_backend/node_modules
 /postgres_backend/node_modules
+*.swp
