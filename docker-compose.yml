@@ -5,11 +5,16 @@ services:
     # docker exec --user postgres -it docker_compose_postgres_test_db_1 psql
     # -h localhost -U postgres
     # but this was just a sanity check
+    # update: worked perfectly fine connecting from node/express
     image: postgres:alpine
     environment:
       POSTGRES_PASSWORD: examples
     ports:
       - "5432:5432"
+  rediscache:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
   # webapp:
     # build: .
     # depends_on: db

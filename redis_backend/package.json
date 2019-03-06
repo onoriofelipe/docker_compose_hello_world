@@ -1,16 +1,16 @@
 {
-  "name": "docker_compose_postgres_test",
+  "name": "redis_backend",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node postgres_container_sanity_check.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node redis_container_sanity_check.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "express": "^4.16.4",
-    "pg": "^7.8.0"
+    "redis": "^2.8.0"
   }
 }
