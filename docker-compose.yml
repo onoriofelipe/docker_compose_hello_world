@@ -8,7 +8,7 @@ services:
     # update: worked perfectly fine connecting from node/express
     image: postgres:alpine
     environment:
-      POSTGRES_PASSWORD: examples
+      POSTGRES_PASSWORD: postgres_password
     ports:
       - "5432:5432"
   rediscache:

@@ -16,24 +16,20 @@ const postgresClient = new postgresModule.Pool({
 
 const app = express();
 
+postgresClient.connect((err) => {
+  if (err){
+    console.log(`Error during connection to dabatase: ${err}.`);
+  } else {
+    console.log('Successfully connected to database.')
+  }
+});
+
 app.get('/', (req, res) => {
-  let first_message = `GET coming from port ${port}.`
-  let second_message = `environment: ${process.env.PGHOST}.`
-  res.send(`${first_message}<br>${second_message}`);
-  // res.json(process.env);
+  postgresClient.query('SELECT 1;')
+  .then( results => { console.log(`Query results: ${results}`) } )
+  .catch( err => { console.log(`Error after trying pg query. Stack:${err.stack}`) } );
 });
 
 app.listen(port, () => {
   console.log(`Listening at port ${port}.`);
 });
-
-// [x] javascript string interpolation
-// [x] require import export difference
-// [] npm modules:
-//   [x]process
-//   []redis
-//     []https://www.npmjs.com/package/redis
-//   [x]postgres
-//     [x]https://www.npmjs.com/package/pg
-//     [x]https://node-postgres.com/
-// [x] global.process
