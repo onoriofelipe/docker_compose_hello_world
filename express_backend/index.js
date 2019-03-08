@@ -1,5 +1,5 @@
 const express = require('express');
-// const redisModule = require('redis');
+const redisModule = require('redis');
 const postgresModule = require('pg');
 const process = require('process');
 const keys = require('./keys.js');
@@ -24,9 +24,20 @@ postgresClient.connect((err) => {
   }
 });
 
+const redisClient = redisModule.createClient();
+redisClient.on('error', err => console.log(`Redis error: ${err}`));
+redisClient.set('some_key', 'some_value');
+redisClient.get('some_key', (err, result) => console.log(`Redis result: ${result}`));
+
 app.get('/', (req, res) => {
   postgresClient.query('SELECT 1;')
-  .then( results => { console.log(`Query results: ${results}`) } )
+  .then( results => {
+    console.log(`Query results: ${results}`);
+    console.log(results);
+    // res.send(`Query results: ${results}`); 
+    // res.json(`Query results: ${results}`); 
+    res.json(results); 
+  })
   .catch( err => { console.log(`Error after trying pg query. Stack:${err.stack}`) } );
 });
 
