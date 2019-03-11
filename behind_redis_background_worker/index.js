@@ -4,9 +4,10 @@ const {promisify} = require('util'); // promisify, no npm modules required?
 // or has this already been included somewhere else? test later
 
 const port = '4000';
+const redisDefaultClient = redisModule.createClient();
 const redisSubscriberClient = redisModule.createClient();
 const redisPublisherClient = redisModule.createClient();
-const redisGetAsync = promisify(redisSubscriberClient.get).bind(redisSubscriberClient);
+const redisGetAsync = promisify(redisDefaultClient.get).bind(redisDefaultClient);
 const app = express();
 
 var globalCount = 0;
@@ -21,10 +22,10 @@ var otherGlobalCount = 0;
 // including one await keywork)
 app.get('/first_try', (req, res) => {
     let fullResponse = 'initial response string<br>';
-    redisSubscriberClient.set('some_counter', (++globalCount).toString());
+    redisDefaultClient.set('some_counter', (++globalCount).toString());
     let someAsyncFunc = async (rs,rj) => {
         let somePromise = new Promise( (resolve, reject) => {
-            redisSubscriberClient.get('some_counter', (err, result) => {
+            redisDefaultClient.get('some_counter', (err, result) => {
                 if(err) console.log(err.stack)
                 else {
                     console.log('Redis results:');
@@ -44,7 +45,7 @@ app.get('/first_try', (req, res) => {
 // (some time later...)
 app.get('/promises', (req, res) => {
     let fullResponse = 'initial response string<br>';
-    redisSubscriberClient.set('some_other_counter', (++anotherGlobalCount).toString());
+    redisDefaultClient.set('some_other_counter', (++anotherGlobalCount).toString());
     // alternatively it becomes similar to the async/await flow,
     // but with one additional callback:
     // let somePromise = redisGetAsync(...);
@@ -63,7 +64,7 @@ app.get('/promises', (req, res) => {
 
 app.get('/await', async (req, res) => {
     let fullResponse = 'initial response string<br>';
-    redisSubscriberClient.set('some_other_counter', (++otherGlobalCount).toString());
+    redisDefaultClient.set('some_other_counter', (++otherGlobalCount).toString());
     try {
         let result = await redisGetAsync('some_other_counter');
         // everything until the end of the block is equivalent to a then block
@@ -83,42 +84,42 @@ app.get('/await', async (req, res) => {
     // f().catch((err)=>{...});
 });
 
-// default routes for miscellaneous testing
-// they are down here so the url parameter doesn't gobble up the previous routes
-// since express parses the routes sequentially
-// getting a url parameter:
-// requires express, different workflow from node's default way
-// url.parse(req.url, true).query
-app.get('/:number', (req, res) => {
-    let numberString = req.params.number;
-    let number = parseInt(numberString);
-    let resultString = `Calculating fibonacci number sequentially<br>n: ${number.toString()}<br>fib(n): ${nonRecursiveFib(number)}`;
-    console.log(resultString);
-    res.send(resultString);
-});
-
-app.get('/recursive/:number', (req, res) => {
-    let numberString = req.params.number;
-    let number = parseInt(numberString);
-    let resultString = `Calculating fibonacci number recursivelly<br>n: ${number.toString()}<br>fib(n): ${recursiveFib(number)}`;
-    console.log(resultString);
-    res.send(resultString);
-});
-
 
 // PUB AND SUB PART
-// note: no calls to routes are being made, communication between one express
+// note: no calls to routes are being made between the two express instances,
+// communication between one express
 // instance and another is happening through redis via its sub and pub events
-/*
+// so redis is sandwiched between two expresses
+
 //[]TODO: change to saving data on a dictionary instead of just publishing it
-redisSubscriberClient.sub('fib_channel');
-redisSubscriberClient.on('message', 'fib_channel', (stringValue) => {
+redisSubscriberClient.on('message', (channelName, stringValue) => {
     desiredValue = parseInt(stringValue);
     calculatedValue = nonRecursiveFib(desiredValue);
     // calculatedValue = recursiveFib(desiredValue);
-    redisPublisherClient.pub('fib_channel', calculatedValue.toString());
+    redisPublisherClient.publish('fib_results_channel', 
+                                    calculatedValue.toString());
+    console.log(`Subscriber client received a message '${stringValue}' on \
+channel ${channelName} and publisher client published result \
+${calculatedValue} on fib_results_channel (but there was nobody listening...)`);
 });
-*/
+
+// NOTEWORTHY:
+// found out that when a client gets put into subscriber mode, the only other 
+// actions it may take while listening are the ones that modify the subscription
+// such as pub/sub/ping?/quit, and this is interesting because if you try to do
+// regular stuff (hint: in other routes) you will transgress this rule
+// so a reasonable rule of thumb is using each pub/sub client solely for that
+// purpose and nothing else (which in the big scheme of things should be the 
+// sensible default anyway)
+redisSubscriberClient.subscribe('fib_channel');
+
+// add a testing route for convenience in generating events hah
+app.get('/simulated_publish_trigger', (req, res) => {
+    redisPublisherClient.publish('fib_channel', '22');
+    res.send('Publisher client published random message on fib_channel.');
+});
+
+// RANDOM MCGUFFIN FUNCTION IMPLEMENTATION
 function recursiveFib(n){
     if(n == 0 || n == 1){
         return 1;
@@ -140,4 +141,38 @@ function nonRecursiveFib(n){
 // r   1   1   2   3   5   8   13
 // c   1   1   1+1 1+2 2+3 3+5 5+8
 
-app.listen(port, (err) => {if(err) console.log(`Express error: ${err}`);});
+// default routes for miscellaneous testing
+// they are down here so the url parameter doesn't gobble up the previous routes
+// since express parses the routes sequentially
+// getting a url parameter:
+// requires express, different workflow from node's default way
+// url.parse(req.url, true).query
+
+// NOTEWORTHY: specifying a generic :glob at root (as in :number) 
+// makes express match (and execute the contents of!) multiple routes 
+// even in the case where it has already found an appropriate match previously
+// this is probably documented and can be switched in some way but would not
+// be a good practice to do anyway, so this surprise is a good one
+app.get('/sequential_fib/:number', (req, res) => {
+    let numberString = req.params.number;
+    let number = parseInt(numberString);
+    let resultString = `Calculating fibonacci number sequentially<br>n: ${number.toString()}<br>fib(n): ${nonRecursiveFib(number)}`;
+    console.log(resultString);
+    res.send(resultString);
+});
+
+app.get('/recursive_fib/:number', (req, res) => {
+    let numberString = req.params.number;
+    let number = parseInt(numberString);
+    let resultString = `Calculating fibonacci number recursivelly<br>n: ${number.toString()}<br>fib(n): ${recursiveFib(number)}`;
+    console.log(resultString);
+    res.send(resultString);
+});
+
+app.listen(port, (err) => {
+    if(err) {
+        console.log(`Express error: ${err}`);
+    } else {
+        console.log(`Succesful server connection at port ${port}.`);
+    }
+});
