@@ -7,7 +7,11 @@ const port = '4000';
 const redisDefaultClient = redisModule.createClient();
 const redisSubscriberClient = redisModule.createClient();
 const redisPublisherClient = redisModule.createClient();
-const redisGetAsync = promisify(redisDefaultClient.get).bind(redisDefaultClient);
+const redisResultListenerClient = redisModule.createClient();
+const redisGetAsync = promisify(redisDefaultClient.get)
+                                .bind(redisDefaultClient);
+const redisPublisherHsetAsync = promisify(redisPublisherClient.hset)
+                                .bind(redisPublisherClient);
 const app = express();
 
 var globalCount = 0;
@@ -92,15 +96,34 @@ app.get('/await', async (req, res) => {
 // so redis is sandwiched between two expresses
 
 //[]TODO: change to saving data on a dictionary instead of just publishing it
-redisSubscriberClient.on('message', (channelName, stringValue) => {
-    desiredValue = parseInt(stringValue);
+redisSubscriberClient.on('message', (channelName, desiredValueString) => {
+    desiredValue = parseInt(desiredValueString);
     calculatedValue = nonRecursiveFib(desiredValue);
+    calculatedValueString = calculatedValue.toString();
     // calculatedValue = recursiveFib(desiredValue);
-    redisPublisherClient.publish('fib_results_channel', 
-                                    calculatedValue.toString());
-    console.log(`Subscriber client received a message '${stringValue}' on \
+    //[x] now do async part so that the result is only published
+    // after hset is done
+    console.log(`About to begin hset with ${desiredValueString}\
+:${calculatedValueString}`);
+    redisPublisherHsetAsync('calculated_fib_dict', desiredValueString, 
+                              calculatedValueString)
+    .then( (result) => {
+        console.log(`hset('calculated_fib_dict', ${desiredValueString}, \
+${calculatedValueString}) done.`);
+    })
+    .then( (result) => {
+        redisPublisherClient.publish('fib_results_channel', 
+                                        calculatedValueString);
+        console.log(`Subscriber client received a message \
+'${desiredValueString}' on \
 channel ${channelName} and publisher client published result \
-${calculatedValue} on fib_results_channel (but there was nobody listening...)`);
+${calculatedValue} on fib_results_channel`);
+    })
+    .catch( (err) => { console.log(`Error during hset: ${err.stack}`);});
+});
+
+redisResultListenerClient.on('message', (channelName, resultString) => {
+    console.log(`Result ${resultString} published on ${channelName}.`);
 });
 
 // NOTEWORTHY:
@@ -111,12 +134,15 @@ ${calculatedValue} on fib_results_channel (but there was nobody listening...)`);
 // so a reasonable rule of thumb is using each pub/sub client solely for that
 // purpose and nothing else (which in the big scheme of things should be the 
 // sensible default anyway)
-redisSubscriberClient.subscribe('fib_channel');
+redisSubscriberClient.subscribe('fib_order_channel');
+
+// client for testing if results are being correctly published
+redisResultListenerClient.subscribe('fib_results_channel');
 
 // add a testing route for convenience in generating events hah
 app.get('/simulated_publish_trigger', (req, res) => {
-    redisPublisherClient.publish('fib_channel', '22');
-    res.send('Publisher client published random message on fib_channel.');
+    redisPublisherClient.publish('fib_order_channel', '22');
+    res.send('Publisher client published random message on fib_order_channel.');
 });
 
 // RANDOM MCGUFFIN FUNCTION IMPLEMENTATION
