@@ -4,10 +4,16 @@ const {promisify} = require('util'); // promisify, no npm modules required?
 // or has this already been included somewhere else? test later
 
 const port = '4000';
-const redisDefaultClient = redisModule.createClient();
-const redisSubscriberClient = redisModule.createClient();
-const redisPublisherClient = redisModule.createClient();
-const redisResultListenerClient = redisModule.createClient();
+const redisDefaultClient = redisModule.createClient({
+    host: 'rediscache',
+    retry_strategy: () => { return 1000; }
+});
+const redisSubscriberClient = redisDefaultClient.duplicate();
+// const redisSubscriberClient = redisModule.createClient();
+const redisPublisherClient = redisDefaultClient.duplicate(); 
+// const redisPublisherClient = redisModule.createClient();
+const redisResultListenerClient = redisDefaultClient.duplicate();
+// const redisResultListenerClient = redisModule.createClient();
 const redisGetAsync = promisify(redisDefaultClient.get)
                                 .bind(redisDefaultClient);
 const redisPublisherHsetAsync = promisify(redisPublisherClient.hset)
