@@ -1,5 +1,21 @@
 version: '3.1'
 services:
+  background_worker:
+    build:
+      context: "./behind_redis_background_worker/"
+      dockerfile: "Dockerfile.dev"
+    ports:
+      - "4000:4000"
+    volumes:
+      - "./behind_redis_background_worker:/app"
+  main_backend:
+    build:
+      context: "./express_backend"
+      dockerfile: "Dockerfile.dev"
+    ports:
+      - "3000:3000"
+    volumes:
+      - "./express_backend:/app"
   db:
     # successfully connected directly to db with
     # docker exec --user postgres -it docker_compose_postgres_test_db_1 psql

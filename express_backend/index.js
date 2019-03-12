@@ -25,8 +25,12 @@ postgresClient.connect((err) => {
     }
 });
 
-const redisClient = redisModule.createClient();
-const orderMakingClient = redisModule.createClient();
+const redisClient = redisModule.createClient({
+    host: 'rediscache',
+    retry_strategy: () => { return 1000; }
+});
+const orderMakingClient = redisClient.duplicate();
+// const orderMakingClient = redisModule.createClient();
 redisClient.on('error', err => console.log(`Redis error: ${err}`));
 const redisClientHgetAsync = promisify(redisClient.hget).bind(redisClient);
 const redisClientHgetallAsync =
